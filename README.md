@@ -4,7 +4,7 @@ WorkGraph is an employee work-management platform for organizing assignments and
 
 ## Project state
 
-The initial application foundation is in place: the web client, API process, MongoDB connection, initial collection/index setup, API health route, shared local development command, security middleware defaults, and environment validation. Authentication, employee and role management, and task workflows are planned next; they are not implemented yet.
+The web client, API, MongoDB connection, initial collection/index setup, login, protected routes, and admin-managed employee/job-role accounts are implemented. Task assignment, collaboration, and workflow features are the next milestones.
 
 ## Requirements
 
@@ -31,11 +31,9 @@ The API connects to the `workgraph` database before starting and creates the req
 
 See `.env.example`. Do not commit `.env` or production credentials. `MONGODB_URI` is the MongoDB connection string, `MONGODB_DB_NAME` selects the database, and `WEB_ORIGIN` controls the allowed browser origin. `SEED_*` variables are for local development only; change the sample passwords before sharing the app and never use them in production.
 
-## Planned Phase 1 sequence
+## Phase 1 progress
 
-1. Application foundation (current milestone).
-2. MongoDB data model and versioned schema/index setup.
-3. Authentication and protected routes.
-4. Employee and job-role administration.
-5. Task assignment, atomic claiming, status workflow, review, and audit history.
-6. Automated permission and workflow coverage.
+1. Application foundation, MongoDB connection, and collection/index setup — complete.
+2. Login, protected sessions, and admin-only employee/job-role management — complete.
+3. Task assignment, atomic claiming, status workflow, review, and audit history — next.
+4. Automated permission and workflow coverage — planned alongside task features.

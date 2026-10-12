@@ -161,7 +161,7 @@ export function requireSession(database) {
   });
 }
 
-function requireAdmin(request, response, next) {
+export function requireAdmin(request, response, next) {
   if (request.user?.accountRole !== 'admin') return response.status(403).json({ error: { code: 'FORBIDDEN', message: 'Administrator access is required.' } });
   return next();
 }

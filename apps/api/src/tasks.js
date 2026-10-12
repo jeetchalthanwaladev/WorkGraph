@@ -44,6 +44,7 @@ const taskActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('approve'), feedback: z.string().trim().max(2000).default('') }),
   z.object({ action: z.literal('request_changes'), feedback: z.string().trim().min(3).max(2000) })
 ]);
+const TASK_EDIT_WINDOW_MS = 10 * 60 * 1000;
 
 function asyncHandler(handler) {
   return (request, response, next) => Promise.resolve(handler(request, response, next)).catch(next);
@@ -125,6 +126,65 @@ export function createTasksRouter({ database }) {
     await database.collection('task_activity').insertOne({ taskId: result.insertedId, actorId: request.user._id, action: 'Task created', createdAt: now });
     const [record] = await taskRecords(database, { _id: result.insertedId });
     return response.status(201).json({ data: { task: record } });
+  }));
+
+  router.put('/:id', requireSession(database), requireAdmin, asyncHandler(async (request, response) => {
+    if (!ObjectId.isValid(request.params.id)) return response.status(404).json({ error: { code: 'TASK_NOT_FOUND', message: 'Task not found.' } });
+    const input = taskSchema.safeParse(request.body);
+    if (!input.success) return response.status(400).json({ error: { code: 'INVALID_TASK', message: 'Check the task title, description, assignee, role, dates, and client details.' } });
+
+    const taskId = new ObjectId(request.params.id);
+    const task = await database.collection('tasks').findOne({ _id: taskId });
+    if (!task) return response.status(404).json({ error: { code: 'TASK_NOT_FOUND', message: 'Task not found.' } });
+    if (Date.now() - task.createdAt.getTime() > TASK_EDIT_WINDOW_MS) {
+      return response.status(403).json({ error: { code: 'EDIT_WINDOW_EXPIRED', message: 'Tasks can only be edited during the first 10 minutes after creation. Delete this task and create a new one instead.' } });
+    }
+    if (task.status !== 'available') {
+      return response.status(409).json({ error: { code: 'TASK_ALREADY_STARTED', message: 'This task has already been started and can no longer be edited.' } });
+    }
+
+    const assigneeId = new ObjectId(input.data.assigneeId);
+    const roleId = new ObjectId(input.data.roleId);
+    const assignee = await database.collection('users').findOne({ _id: assigneeId, accountRole: 'employee', isActive: true });
+    if (!assignee) return response.status(400).json({ error: { code: 'INVALID_ASSIGNEE', message: 'Choose an active employee.' } });
+    if (!(assignee.roleIds ?? []).some((assignedRoleId) => assignedRoleId.equals(roleId))) {
+      return response.status(400).json({ error: { code: 'ROLE_NOT_ASSIGNED', message: 'Choose a role assigned to this employee.' } });
+    }
+
+    const now = new Date();
+    const reportAt = new Date(`${input.data.reportingDate}T12:00:00.000Z`);
+    const completionDueAt = new Date(`${input.data.completionDate}T12:00:00.000Z`);
+    const updated = await database.collection('tasks').updateOne(
+      { _id: taskId, status: 'available', createdAt: { $eq: task.createdAt, $gte: new Date(Date.now() - TASK_EDIT_WINDOW_MS) }, updatedAt: task.updatedAt },
+      { $set: {
+        title: input.data.title,
+        description: input.data.description,
+        assigneeId,
+        roleId,
+        reportAt,
+        dueAt: reportAt,
+        completionDueAt,
+        hasClientInfo: input.data.hasClientInfo,
+        client: input.data.hasClientInfo ? input.data.client : null,
+        updatedAt: now
+      } }
+    );
+    if (!updated.matchedCount) return response.status(409).json({ error: { code: 'TASK_CHANGED', message: 'This task changed while you were editing it. Refresh the page and try again.' } });
+    await database.collection('task_activity').insertOne({ taskId, actorId: request.user._id, action: 'Task edited', createdAt: now });
+    const [record] = await taskRecords(database, { _id: taskId });
+    return response.json({ data: { task: record } });
+  }));
+
+  router.delete('/:id', requireSession(database), requireAdmin, asyncHandler(async (request, response) => {
+    if (!ObjectId.isValid(request.params.id)) return response.status(404).json({ error: { code: 'TASK_NOT_FOUND', message: 'Task not found.' } });
+    const taskId = new ObjectId(request.params.id);
+    const result = await database.collection('tasks').deleteOne({ _id: taskId });
+    if (!result.deletedCount) return response.status(404).json({ error: { code: 'TASK_NOT_FOUND', message: 'Task not found.' } });
+    await Promise.all([
+      database.collection('task_activity').deleteMany({ taskId }),
+      database.collection('task_comments').deleteMany({ taskId })
+    ]);
+    return response.json({ data: { success: true } });
   }));
 
   router.patch('/:id', requireSession(database), asyncHandler(async (request, response) => {

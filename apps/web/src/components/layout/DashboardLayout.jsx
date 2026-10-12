@@ -10,7 +10,7 @@ import EmployeeDashboard from '../employee/dashboard/EmployeeDashboard.jsx';
 const TasksPage = lazy(() => import('../admin/tasks/TasksPage.jsx'));
 const ProfilePage = lazy(() => import('../profile/ProfilePage.jsx'));
 
-export default function DashboardLayout({ section = 'overview' }) {
+export default function DashboardLayout({ section = 'overview', taskView = 'overview' }) {
   const user = useSelector((state) => state.auth.user);
   const dispatch = useDispatch(); const navigate = useNavigate();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -23,10 +23,11 @@ export default function DashboardLayout({ section = 'overview' }) {
     if (event.key === 'Escape') setProfileMenuOpen(false);
   }
   const displayRole = admin ? 'Administrator' : user.roles.map((role) => role.name).join(' · ') || 'Employee';
-  const sectionTitle = section === 'team' ? 'Team & roles' : section === 'tasks' ? 'Tasks' : section === 'profile' ? 'Profile' : 'Overview';
+  const taskViewTitle = taskView === 'review' ? 'Awaiting review' : taskView === 'new' ? 'Add new task' : 'Overview';
+  const sectionTitle = section === 'team' ? 'Team & roles' : section === 'tasks' ? `Tasks / ${taskViewTitle}` : section === 'profile' ? 'Profile' : 'Overview';
   return <main className="shell">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">W</span><span>workgraph</span></div><p className="nav-label">WORKSPACE</p>
-      <nav aria-label="Main navigation"><NavLink end to="/dashboard" className={({ isActive }) => `nav-item${isActive && section === 'overview' ? ' active' : ''}`}><span>◫</span> Overview</NavLink>{admin && <><NavLink to="/dashboard/tasks" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}><span>▤</span> Tasks</NavLink><NavLink to="/dashboard/team" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}><span>♙</span> Team &amp; roles</NavLink></>}</nav>
+      <nav aria-label="Main navigation"><NavLink end to="/dashboard" className={({ isActive }) => `nav-item${isActive && section === 'overview' ? ' active' : ''}`}><span>◫</span> Overview</NavLink>{admin && <><NavLink to="/dashboard/tasks" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}><span>▤</span> Tasks</NavLink>{section === 'tasks' && <div className="nav-submenu" aria-label="Task pages"><NavLink end to="/dashboard/tasks" className={({ isActive }) => `nav-subitem${isActive ? ' active' : ''}`}>Overview tasks</NavLink><NavLink to="/dashboard/tasks/review" className={({ isActive }) => `nav-subitem${isActive ? ' active' : ''}`}>Awaiting review</NavLink><NavLink to="/dashboard/tasks/new" className={({ isActive }) => `nav-subitem${isActive ? ' active' : ''}`}>Add new task</NavLink></div>}<NavLink to="/dashboard/team" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}><span>♙</span> Team &amp; roles</NavLink></>}</nav>
       <div className="sidebar-bottom"><span className="avatar">{user.fullName.slice(0, 1).toUpperCase()}</span><span><strong>{user.fullName}</strong><small>{displayRole}</small></span><button className="logout-link" onClick={handleLogout} aria-label="Sign out">↪</button></div>
     </aside>
     <section className="main-panel"><header className="topbar"><span className="crumb">Workspace <span>/</span> {sectionTitle}</span><div className="top-actions"><span className="role-pill">{admin ? 'ADMIN' : 'EMPLOYEE'}</span>
@@ -38,7 +39,7 @@ export default function DashboardLayout({ section = 'overview' }) {
         </div>}
       </div>
     </div></header>
-      {section === 'team' ? <TeamManagement /> : section === 'tasks' || section === 'profile' ? <Suspense fallback={<div className="content dashboard-content"><p className="subtitle">Opening workspace…</p></div>}>{section === 'tasks' ? <TasksPage /> : <ProfilePage user={user} displayRole={displayRole} />}</Suspense> : admin ? <AdminDashboard user={user} /> : <EmployeeDashboard user={user} />}
+      {section === 'team' ? <TeamManagement /> : section === 'tasks' || section === 'profile' ? <Suspense fallback={<div className="content dashboard-content"><p className="subtitle">Opening workspace…</p></div>}>{section === 'tasks' ? <TasksPage view={taskView} /> : <ProfilePage user={user} displayRole={displayRole} />}</Suspense> : admin ? <AdminDashboard user={user} /> : <EmployeeDashboard user={user} />}
     </section>
   </main>;
 }

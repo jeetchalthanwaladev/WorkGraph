@@ -44,7 +44,7 @@ export default function AdminDashboard({ user }) {
       <article className="panel admin-widget"><div className="panel-heading"><div><h2>Recent activity</h2><p>Latest changes across your workspace</p></div><span className="setup-badge">ACTIVITY</span></div><ActivityList items={recentActivity} /></article>
       <article className="panel admin-widget"><div className="panel-heading"><div><h2>Upcoming deadlines</h2><p>Due in the next seven days</p></div><span className="setup-badge">7 DAYS</span></div><DeadlineList items={upcomingDeadlines} /></article>
     </div>
-    <div className="admin-note"><span>✦</span><div><strong>Your admin workspace</strong><p><Link to="/dashboard/tasks">Create and assign tasks</Link> to your team. Manage employee access and job roles from <Link to="/dashboard/team">Team &amp; roles</Link>.</p></div></div>
+    <div className="admin-note"><span>✦</span><div><strong>Your admin workspace</strong><p><Link to="/dashboard/tasks/new">Create and assign tasks</Link> to your team. Manage employee access and job roles from <Link to="/dashboard/team">Team &amp; roles</Link>.</p></div></div>
     <footer>WorkGraph <span>·</span> Office task management</footer>
   </div>;
 }

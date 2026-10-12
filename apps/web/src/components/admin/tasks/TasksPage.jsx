@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { request } from '../../../services/api.js';
 
 const EMPTY_CLIENT = { name: '', company: '', email: '', phone: '' };
@@ -14,7 +15,10 @@ function openDatePicker(event) {
   }
 }
 
-export default function TasksPage() {
+export default function TasksPage({ view = 'overview' }) {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editTaskId = searchParams.get('edit');
   const today = localToday();
   const [employees, setEmployees] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -34,6 +38,8 @@ export default function TasksPage() {
   const [saving, setSaving] = useState(false);
   const [reviewNotes, setReviewNotes] = useState({});
   const [reviewingTaskId, setReviewingTaskId] = useState('');
+  const [editingTask, setEditingTask] = useState(null);
+  const [now, setNow] = useState(Date.now());
 
   const selectedEmployee = employees.find((employee) => employee.id === assigneeId);
   const availableRoles = useMemo(() => selectedEmployee?.roles ?? [], [selectedEmployee]);
@@ -64,6 +70,26 @@ export default function TasksPage() {
     return () => { active = false; };
   }, [loadTaskWorkspace]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 15000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (view !== 'new' || !editTaskId || loading) return;
+    const task = tasks.find((item) => item.id === editTaskId);
+    if (!task) return;
+    setEditingTask(task);
+    setTitle(task.title);
+    setDescription(task.description);
+    setAssigneeId(task.assignee.id);
+    setRoleId(employees.find((employee) => employee.id === task.assignee.id)?.roles.find((role) => role.name === task.role.name)?.id ?? task.role.id);
+    setCompletionDate(task.completionDate ?? '');
+    setReportingDate(task.reportingDate ?? '');
+    setHasClientInfo(task.hasClientInfo);
+    setClient(task.client ?? EMPTY_CLIENT);
+  }, [editTaskId, employees, loading, tasks, view]);
+
   function chooseEmployee(id) {
     const employee = employees.find((record) => record.id === id);
     setAssigneeId(id);
@@ -77,15 +103,31 @@ export default function TasksPage() {
   async function handleSubmit(event) {
     event.preventDefault(); setError(''); setNotice(''); setSaving(true);
     try {
-      await request('/api/v1/tasks', {
-        method: 'POST',
+      await request(editingTask ? `/api/v1/tasks/${editingTask.id}` : '/api/v1/tasks', {
+        method: editingTask ? 'PUT' : 'POST',
         body: JSON.stringify({ title, description, assigneeId, roleId, completionDate, reportingDate, hasClientInfo, client: hasClientInfo ? client : undefined })
       });
       setTitle(''); setDescription(''); setAssigneeId(''); setRoleId(''); setCompletionDate(''); setReportingDate(''); setHasClientInfo(false); setClient(EMPTY_CLIENT);
-      await loadTaskWorkspace(); setNotice('Task created and assigned to the selected employee.');
+      setEditingTask(null); setSearchParams({}); await loadTaskWorkspace(); setNotice(editingTask ? 'Task updated.' : 'Task created and assigned to the selected employee.');
     } catch (saveError) { setError(saveError.message); }
     finally { setSaving(false); }
   }
+
+  async function deleteTask(task) {
+    if (!window.confirm(`Delete “${task.title}”? This permanently removes the task and its activity and comments.`)) return;
+    setError(''); setNotice('');
+    try {
+      await request(`/api/v1/tasks/${task.id}`, { method: 'DELETE' });
+      await loadTaskWorkspace(); setNotice('Task deleted. You can create a replacement from Add new task.');
+    } catch (deleteError) { setError(deleteError.message); }
+  }
+
+  function editTimeRemaining(task) {
+    if (!task.createdAt) return 0;
+    return Math.max(0, 10 * 60 * 1000 - (now - new Date(task.createdAt).getTime()));
+  }
+
+  const pageTitle = view === 'review' ? 'Awaiting review' : view === 'new' ? (editingTask ? 'Edit task' : 'Add new task') : 'Overview tasks';
 
   async function reviewTask(task, action) {
     const feedback = reviewNotes[task.id] ?? '';
@@ -103,13 +145,14 @@ export default function TasksPage() {
   }
 
   const awaitingReview = tasks.filter((task) => task.status === 'submitted_for_review');
+  const editWindowExpired = Boolean(editingTask && editTimeRemaining(editingTask) <= 0);
 
   return <div className="content dashboard-content tasks-page">
-    <div className="welcome"><div><p className="eyebrow">PLAN &amp; ASSIGN WORK</p><h1>Tasks</h1><p className="subtitle">Create a task, assign the right employee and role, and set the dates everyone is working toward.</p></div><div className="date-chip"><span className="date-icon">▤</span><span><small>TASKS</small><strong>{tasks.length} in workspace</strong></span></div></div>
+    <div className="welcome"><div><p className="eyebrow">PLAN &amp; ASSIGN WORK</p><h1>{pageTitle}</h1><p className="subtitle">{view === 'review' ? 'Review submissions, approve completed work, or send clear feedback for revision.' : view === 'new' ? (editingTask ? 'Make corrections within the 10-minute editing window.' : 'Assign the right employee and role, set deadlines, and include the task brief.') : 'View every task, check its status, and manage newly created work.'}</p></div><div className="date-chip"><span className="date-icon">▤</span><span><small>TASKS</small><strong>{tasks.length} in workspace</strong></span></div></div>
     {notice && <p className="notice-banner" role="status">✓ {notice}</p>}{error && <p className="form-error page-error" role="alert">{error}</p>}
     {employeeLoadError && <p className="form-error page-error" role="alert">Could not load employees: {employeeLoadError}</p>}
 
-    <article className="panel review-queue-panel">
+    {view === 'review' && <article className="panel review-queue-panel">
       <div className="panel-heading"><div><h2>Awaiting review</h2><p>Review employee submissions and decide the next step.</p></div><span className="count-badge">{awaitingReview.length}</span></div>
       {awaitingReview.length ? <div className="review-queue-list">{awaitingReview.map((task) => <article className="review-queue-item" key={task.id}>
         <div className="review-task-heading"><div><h3>{task.title}</h3><p>{task.assignee.fullName} · {task.role.name}</p></div><span className="task-status status-submitted_for_review">Awaiting review</span></div>
@@ -119,10 +162,10 @@ export default function TasksPage() {
         <label className="review-feedback-field" htmlFor={`review-note-${task.id}`}>Feedback <span>Optional when approving; required when requesting changes.</span><textarea id={`review-note-${task.id}`} value={reviewNotes[task.id] ?? ''} onChange={(event) => setReviewNotes((current) => ({ ...current, [task.id]: event.target.value }))} maxLength="2000" rows="3" placeholder="Share clear, actionable feedback with the employee." /></label>
         <div className="review-actions"><button className="secondary-button request-changes-button" type="button" disabled={reviewingTaskId === task.id} onClick={() => reviewTask(task, 'request_changes')}>{reviewingTaskId === task.id ? 'Saving…' : 'Request changes'}</button><button className="primary-button" type="button" disabled={reviewingTaskId === task.id} onClick={() => reviewTask(task, 'approve')}>{reviewingTaskId === task.id ? 'Saving…' : 'Approve & complete'}<span>✓</span></button></div>
       </article>)}</div> : <div className="list-empty review-empty"><span>✓</span><strong>No tasks awaiting review</strong><small>Employee submissions will appear here when they are ready.</small></div>}
-    </article>
+    </article>}
 
-    <article className="panel task-form-panel">
-      <div className="panel-heading"><div><h2>Create a task</h2><p>Assign work to an active employee under one of their job roles.</p></div><span className="setup-badge">ADMIN</span></div>
+    {view === 'new' && <article className="panel task-form-panel">
+      <div className="panel-heading"><div><h2>{editingTask ? 'Edit task' : 'Create a task'}</h2><p>{editingTask ? 'Changes can be saved during the 10-minute edit window.' : 'Assign work to an active employee under one of their job roles.'}</p></div><span className="setup-badge">ADMIN</span></div>
       <form className="task-form" onSubmit={handleSubmit}>
         <div className="task-form-grid">
           <div className="task-field task-field-wide"><label htmlFor="taskTitle">Task name</label><input id="taskTitle" value={title} onChange={(event) => setTitle(event.target.value)} required minLength="2" maxLength="140" placeholder="e.g. Create the spring campaign graphics" /></div>
@@ -142,17 +185,19 @@ export default function TasksPage() {
             <div className="task-field"><label htmlFor="clientPhone">Phone <span>Optional</span></label><input id="clientPhone" type="tel" value={client.phone} onChange={(event) => updateClient('phone', event.target.value)} maxLength="30" placeholder="Contact number" /></div>
           </div>}
         </div>
-        <div className="task-form-footer"><span>Tasks are saved to the WorkGraph database.</span><button className="primary-button" type="submit" disabled={saving || loading || employees.length === 0}>{saving ? 'Creating task…' : 'Create task'}<span>→</span></button></div>
+        {editingTask && <p className="task-field-hint edit-window-hint">{editWindowExpired ? 'The 10-minute edit window has expired. Return to the task overview to delete this task and create a replacement.' : `Edit window expires in ${Math.ceil(editTimeRemaining(editingTask) / 60000)} minute${Math.ceil(editTimeRemaining(editingTask) / 60000) === 1 ? '' : 's'}.`}</p>}
+        <div className="task-form-footer"><span>Tasks are saved to the WorkGraph database.</span><button className="primary-button" type="submit" disabled={saving || loading || employees.length === 0 || editWindowExpired}>{saving ? 'Saving…' : editingTask ? 'Save changes' : 'Create task'}<span>→</span></button></div>
         {!loading && !employeeLoadError && employees.length === 0 && <p className="task-field-hint">Create an active employee account and assign them a job role before creating a task.</p>}
       </form>
-    </article>
+    </article>}
 
-    <article className="panel created-tasks-panel"><div className="panel-heading"><div><h2>Workspace tasks</h2><p>Recently created and assigned tasks</p></div><span className="count-badge">{tasks.length}</span></div>
+    {view === 'overview' && <article className="panel created-tasks-panel"><div className="panel-heading"><div><h2>Workspace tasks</h2><p>Recently created and assigned tasks</p></div><button className="primary-button add-task-inline" type="button" onClick={() => navigate('/dashboard/tasks/new')}>Add new task <span>＋</span></button></div>
       {loading ? <div className="list-empty"><strong>Loading tasks…</strong></div> : tasks.length ? <div className="task-list">{tasks.map((task) => <article className="task-list-item" key={task.id}>
         <div className="task-list-main"><span className="task-list-icon">▤</span><div><h3>{task.title}</h3><p>{task.description}</p></div></div>
         <div className="task-list-meta"><span><small>ASSIGNED TO</small><strong>{task.assignee.fullName}</strong></span><span><small>ROLE</small><strong>{task.role.name}</strong></span><span><small>COMPLETION</small><strong>{formatDate(task.completionDate)}</strong></span><span><small>FINAL REPORT</small><strong>{formatDate(task.reportingDate)}</strong></span><span className={`task-status status-${task.status}`}>{task.status.replaceAll('_', ' ')}</span>{task.hasClientInfo && <span className="task-client-tag">Client attached</span>}</div>
+        <div className="task-admin-actions">{editTimeRemaining(task) > 0 && task.status === 'available' && <button className="task-text-action" type="button" onClick={() => navigate(`/dashboard/tasks/new?edit=${task.id}`)}>Edit · {Math.ceil(editTimeRemaining(task) / 60000)} min left</button>}<button className="task-text-action delete-task-action" type="button" onClick={() => deleteTask(task)}>Delete task</button></div>
       </article>)}</div> : <div className="list-empty"><span>▤</span><strong>No tasks created yet</strong><small>Create a task above and it will appear here.</small></div>}
-    </article>
+    </article>}
     <footer>WorkGraph <span>·</span> Task planning and assignment</footer>
   </div>;
 }

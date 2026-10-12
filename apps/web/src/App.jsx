@@ -26,7 +26,9 @@ export default function App() {
     <Route path="/login" element={status === 'authenticated' ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
     <Route path="/forgot-password" element={status === 'authenticated' ? <Navigate to="/dashboard/profile" replace /> : <Suspense fallback={<div className="app-loading"><span className="loading-mark">W</span><span>Opening password help…</span></div>}><ForgotPasswordPage /></Suspense>} />
     <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>} />
-    <Route path="/dashboard/tasks" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" /></ProtectedRoute>} />
+    <Route path="/dashboard/tasks" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" taskView="overview" /></ProtectedRoute>} />
+    <Route path="/dashboard/tasks/review" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" taskView="review" /></ProtectedRoute>} />
+    <Route path="/dashboard/tasks/new" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" taskView="new" /></ProtectedRoute>} />
     <Route path="/dashboard/team" element={<ProtectedRoute adminOnly><DashboardLayout section="team" /></ProtectedRoute>} />
     <Route path="/dashboard/profile" element={<ProtectedRoute><DashboardLayout section="profile" /></ProtectedRoute>} />
     <Route path="*" element={<Navigate to={status === 'authenticated' ? '/dashboard' : '/login'} replace />} />

@@ -17,9 +17,9 @@ The initial application foundation is in place: the web client, API process, Mon
 1. Ensure MongoDB is running locally at `mongodb://localhost:27017/` (or change `MONGODB_URI` in `.env`).
 2. Install dependencies with `npm install`.
 3. Start the web client and API with `npm run dev`.
-4. Open `http://localhost:5173`. The API health endpoint is `http://localhost:4000/api/v1/health`.
+4. Open `http://localhost:5173`. The API health endpoint is `http://localhost:4001/api/v1/health`.
 
-The API connects to the `workgraph` database before starting and creates these collections and indexes if they are missing: `users`, `job_roles`, `tasks`, `task_activity`, and `task_comments`. MongoDB creates the database when the first collection is created. The API exits with a clear message if MongoDB is unavailable. The Vite development server proxies `/api` requests to the API.
+The API connects to the `workgraph` database before starting and creates the required collections and indexes if they are missing. In development, it seeds the configured admin and employee accounts from `.env`; their passwords are stored as bcrypt hashes. The Vite development server proxies `/api` requests to the API. There is no public sign-up route: admins add employees and assign their job roles from **Team & roles**.
 
 ## Commands
 
@@ -29,7 +29,7 @@ The API connects to the `workgraph` database before starting and creates these c
 
 ## Environment variables
 
-See `.env.example`. Do not commit `.env` or production credentials. `MONGODB_URI` is the MongoDB connection string, `MONGODB_DB_NAME` selects the database, and `WEB_ORIGIN` controls the allowed browser origin.
+See `.env.example`. Do not commit `.env` or production credentials. `MONGODB_URI` is the MongoDB connection string, `MONGODB_DB_NAME` selects the database, and `WEB_ORIGIN` controls the allowed browser origin. `SEED_*` variables are for local development only; change the sample passwords before sharing the app and never use them in production.
 
 ## Planned Phase 1 sequence
 

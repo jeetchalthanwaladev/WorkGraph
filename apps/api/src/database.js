@@ -6,7 +6,8 @@ const collectionDefinitions = [
   { name: 'tasks', indexes: [{ key: { status: 1, dueAt: 1 }, options: { name: 'tasks_status_due_at' } }, { key: { claimedBy: 1, status: 1 }, options: { name: 'tasks_claimed_by_status' } }, { key: { assigneeId: 1, status: 1, createdAt: -1 }, options: { name: 'tasks_assignee_status_created' } }] },
   { name: 'task_activity', indexes: [{ key: { taskId: 1, createdAt: -1 }, options: { name: 'task_activity_task_created' } }] },
   { name: 'task_comments', indexes: [{ key: { taskId: 1, createdAt: 1 }, options: { name: 'task_comments_task_created' } }] },
-  { name: 'sessions', indexes: [{ key: { tokenHash: 1 }, options: { unique: true, name: 'sessions_token_hash_unique' } }, { key: { expiresAt: 1 }, options: { expireAfterSeconds: 0, name: 'sessions_expiry_ttl' } }] }
+  { name: 'sessions', indexes: [{ key: { tokenHash: 1 }, options: { unique: true, name: 'sessions_token_hash_unique' } }, { key: { expiresAt: 1 }, options: { expireAfterSeconds: 0, name: 'sessions_expiry_ttl' } }] },
+  { name: 'password_reset_requests', indexes: [{ key: { userId: 1, status: 1 }, options: { name: 'password_reset_user_status' } }] }
 ];
 
 export async function connectDatabase({ uri, databaseName }) {

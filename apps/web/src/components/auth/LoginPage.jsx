@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { sessionLoaded } from '../../store.js';
 import { request } from '../../services/api.js';
 
@@ -34,6 +34,7 @@ export default function LoginPage() {
         <form className="login-form" onSubmit={handleSubmit}>
           <label htmlFor="loginId">Login ID</label><div className="input-wrap"><span className="input-icon">◎</span><input autoComplete="username" autoFocus id="loginId" name="loginId" placeholder="Enter your login ID" value={loginId} onChange={(event) => setLoginId(event.target.value)} required /></div>
           <label htmlFor="password">Password</label><div className="input-wrap"><span className="input-icon">⌑</span><input autoComplete="current-password" id="password" name="password" type="password" placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} required /></div>
+          <div className="login-form-links"><Link to="/forgot-password">Forgot password?</Link></div>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="sign-in-button" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}<span>→</span></button>
         </form>

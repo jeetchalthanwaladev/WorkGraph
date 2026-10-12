@@ -6,9 +6,9 @@ import { request } from '../../services/api.js';
 import AdminDashboard from '../admin/dashboard/AdminDashboard.jsx';
 import TeamManagement from '../admin/team/TeamManagement.jsx';
 import EmployeeDashboard from '../employee/dashboard/EmployeeDashboard.jsx';
-import ProfilePage from '../profile/ProfilePage.jsx';
 
 const TasksPage = lazy(() => import('../admin/tasks/TasksPage.jsx'));
+const ProfilePage = lazy(() => import('../profile/ProfilePage.jsx'));
 
 export default function DashboardLayout({ section = 'overview' }) {
   const user = useSelector((state) => state.auth.user);
@@ -38,7 +38,7 @@ export default function DashboardLayout({ section = 'overview' }) {
         </div>}
       </div>
     </div></header>
-      {section === 'team' ? <TeamManagement /> : section === 'tasks' ? <Suspense fallback={<div className="content dashboard-content"><p className="subtitle">Opening task workspace…</p></div>}><TasksPage /></Suspense> : section === 'profile' ? <ProfilePage user={user} displayRole={displayRole} /> : admin ? <AdminDashboard user={user} /> : <EmployeeDashboard user={user} />}
+      {section === 'team' ? <TeamManagement /> : section === 'tasks' || section === 'profile' ? <Suspense fallback={<div className="content dashboard-content"><p className="subtitle">Opening workspace…</p></div>}>{section === 'tasks' ? <TasksPage /> : <ProfilePage user={user} displayRole={displayRole} />}</Suspense> : admin ? <AdminDashboard user={user} /> : <EmployeeDashboard user={user} />}
     </section>
   </main>;
 }

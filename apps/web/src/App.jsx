@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { sessionLoaded } from './store.js';
@@ -6,6 +6,8 @@ import { request } from './services/api.js';
 import LoginPage from './components/auth/LoginPage.jsx';
 import ProtectedRoute from './components/routes/ProtectedRoute.jsx';
 import DashboardLayout from './components/layout/DashboardLayout.jsx';
+
+const ForgotPasswordPage = lazy(() => import('./components/auth/ForgotPasswordPage.jsx'));
 
 export default function App() {
   const { status } = useSelector((state) => state.auth);
@@ -22,6 +24,7 @@ export default function App() {
   if (status === 'loading') return <div className="app-loading"><span className="loading-mark">W</span><span>Preparing your workspace…</span></div>;
   return <Routes>
     <Route path="/login" element={status === 'authenticated' ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+    <Route path="/forgot-password" element={status === 'authenticated' ? <Navigate to="/dashboard/profile" replace /> : <Suspense fallback={<div className="app-loading"><span className="loading-mark">W</span><span>Opening password help…</span></div>}><ForgotPasswordPage /></Suspense>} />
     <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>} />
     <Route path="/dashboard/tasks" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" /></ProtectedRoute>} />
     <Route path="/dashboard/team" element={<ProtectedRoute adminOnly><DashboardLayout section="team" /></ProtectedRoute>} />

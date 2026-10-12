@@ -2,8 +2,9 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
+import { createAuthRouter } from './auth.js';
 
-export function createApp({ webOrigin = 'http://localhost:5173', database } = {}) {
+export function createApp({ webOrigin = 'http://localhost:5173', database, secureCookies = false } = {}) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -11,6 +12,13 @@ export function createApp({ webOrigin = 'http://localhost:5173', database } = {}
   app.use(cors({ origin: webOrigin, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
   app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, limit: 300 }));
+  app.use('/api/v1', (request, response, next) => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+      const origin = request.get('origin');
+      if (origin && origin !== webOrigin) return response.status(403).json({ error: { code: 'INVALID_ORIGIN', message: 'Request origin is not allowed.' } });
+    }
+    return next();
+  });
 
   app.get('/api/v1/health', async (_request, response) => {
     try {
@@ -20,6 +28,8 @@ export function createApp({ webOrigin = 'http://localhost:5173', database } = {}
       response.status(503).json({ data: { status: 'unavailable', service: 'workgraph-api', database: 'disconnected' } });
     }
   });
+
+  app.use('/api/v1', createAuthRouter({ database, secureCookies }));
 
   app.use((_request, response) => {
     response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found.' } });

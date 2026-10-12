@@ -1,0 +1,15 @@
+{
+  "name": "workgraph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WorkGraph office task management CRM",
+  "workspaces": ["apps/web", "apps/api"],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,magenta \"npm run dev --workspace @workgraph/api\" \"npm run dev --workspace @workgraph/web\"",
+    "build": "npm run build --workspace @workgraph/web && npm run check --workspace @workgraph/api",
+    "start": "npm run start --workspace @workgraph/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

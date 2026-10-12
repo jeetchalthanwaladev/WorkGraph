@@ -29,15 +29,31 @@ export default function TasksPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
+  const [employeesLoading, setEmployeesLoading] = useState(true);
+  const [employeeLoadError, setEmployeeLoadError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const selectedEmployee = employees.find((employee) => employee.id === assigneeId);
   const availableRoles = useMemo(() => selectedEmployee?.roles ?? [], [selectedEmployee]);
 
   const loadTaskWorkspace = useCallback(async () => {
-    const [employeeData, taskData] = await Promise.all([request('/api/v1/employees'), request('/api/v1/tasks')]);
-    setEmployees(employeeData.employees.filter((employee) => employee.isActive));
-    setTasks(taskData.tasks);
+    const employeeRequest = request('/api/v1/employees')
+      .then((employeeData) => {
+        setEmployees(employeeData.employees.filter((employee) => employee.isActive));
+        setEmployeeLoadError('');
+      })
+      .catch((loadError) => {
+        setEmployees([]);
+        setEmployeeLoadError(loadError.message);
+        throw loadError;
+      })
+      .finally(() => setEmployeesLoading(false));
+    const taskRequest = request('/api/v1/tasks')
+      .then((taskData) => { setTasks(taskData.tasks); setError(''); })
+      .catch((loadError) => { setError(loadError.message); throw loadError; });
+
+    const [employeeResult] = await Promise.allSettled([employeeRequest, taskRequest]);
+    if (employeeResult.status === 'rejected') throw employeeResult.reason;
   }, []);
 
   useEffect(() => {
@@ -72,13 +88,14 @@ export default function TasksPage() {
   return <div className="content dashboard-content tasks-page">
     <div className="welcome"><div><p className="eyebrow">PLAN &amp; ASSIGN WORK</p><h1>Tasks</h1><p className="subtitle">Create a task, assign the right employee and role, and set the dates everyone is working toward.</p></div><div className="date-chip"><span className="date-icon">▤</span><span><small>TASKS</small><strong>{tasks.length} in workspace</strong></span></div></div>
     {notice && <p className="notice-banner" role="status">✓ {notice}</p>}{error && <p className="form-error page-error" role="alert">{error}</p>}
+    {employeeLoadError && <p className="form-error page-error" role="alert">Could not load employees: {employeeLoadError}</p>}
 
     <article className="panel task-form-panel">
       <div className="panel-heading"><div><h2>Create a task</h2><p>Assign work to an active employee under one of their job roles.</p></div><span className="setup-badge">ADMIN</span></div>
       <form className="task-form" onSubmit={handleSubmit}>
         <div className="task-form-grid">
           <div className="task-field task-field-wide"><label htmlFor="taskTitle">Task name</label><input id="taskTitle" value={title} onChange={(event) => setTitle(event.target.value)} required minLength="2" maxLength="140" placeholder="e.g. Create the spring campaign graphics" /></div>
-          <div className="task-field"><label htmlFor="taskAssignee">Assign to employee</label><select id="taskAssignee" value={assigneeId} onChange={(event) => chooseEmployee(event.target.value)} required><option value="">Select an employee</option>{employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.fullName}</option>)}</select></div>
+          <div className="task-field"><label htmlFor="taskAssignee">Assign to employee</label><select id="taskAssignee" value={assigneeId} onChange={(event) => chooseEmployee(event.target.value)} required disabled={employeesLoading || Boolean(employeeLoadError)}><option value="">{employeesLoading ? 'Loading employees…' : employeeLoadError ? 'Employees unavailable' : 'Select an employee'}</option>{employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.fullName}</option>)}</select></div>
           <div className="task-field"><label htmlFor="taskRole">Job role</label><select id="taskRole" value={roleId} onChange={(event) => setRoleId(event.target.value)} required disabled={!assigneeId || availableRoles.length === 0}><option value="">{assigneeId ? 'Select a role' : 'Select an employee first'}</option>{availableRoles.map((role) => <option value={role.id} key={role.id}>{role.name}</option>)}</select>{assigneeId && availableRoles.length === 0 && <small className="task-field-hint">Assign a role to this employee in Team &amp; roles first.</small>}</div>
           <div className="task-field"><label htmlFor="completionDate">Target completion date</label><input id="completionDate" type="date" min={today} value={completionDate} onClick={openDatePicker} onChange={(event) => setCompletionDate(event.target.value)} required /></div>
           <div className="task-field"><label htmlFor="reportingDate">Final reporting date</label><input id="reportingDate" type="date" min={today} value={reportingDate} onClick={openDatePicker} onChange={(event) => setReportingDate(event.target.value)} required /></div>
@@ -95,7 +112,7 @@ export default function TasksPage() {
           </div>}
         </div>
         <div className="task-form-footer"><span>Tasks are saved to the WorkGraph database.</span><button className="primary-button" type="submit" disabled={saving || loading || employees.length === 0}>{saving ? 'Creating task…' : 'Create task'}<span>→</span></button></div>
-        {!loading && employees.length === 0 && <p className="task-field-hint">Create an active employee account and assign them a job role before creating a task.</p>}
+        {!loading && !employeeLoadError && employees.length === 0 && <p className="task-field-hint">Create an active employee account and assign them a job role before creating a task.</p>}
       </form>
     </article>
 

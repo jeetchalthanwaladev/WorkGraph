@@ -23,6 +23,7 @@ export default function App() {
   return <Routes>
     <Route path="/login" element={status === 'authenticated' ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
     <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>} />
+    <Route path="/dashboard/tasks" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" /></ProtectedRoute>} />
     <Route path="/dashboard/team" element={<ProtectedRoute adminOnly><DashboardLayout section="team" /></ProtectedRoute>} />
     <Route path="/dashboard/profile" element={<ProtectedRoute><DashboardLayout section="profile" /></ProtectedRoute>} />
     <Route path="*" element={<Navigate to={status === 'authenticated' ? '/dashboard' : '/login'} replace />} />

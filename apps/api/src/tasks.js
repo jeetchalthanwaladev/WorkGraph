@@ -34,6 +34,16 @@ const taskSchema = z.object({
     }
   }
 });
+const taskActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('start') }),
+  z.object({
+    action: z.literal('submit'),
+    summary: z.string().trim().min(10).max(5000),
+    link: z.union([z.string().url().refine((value) => /^https?:\/\//i.test(value)), z.literal('')]).default('')
+  }),
+  z.object({ action: z.literal('approve'), feedback: z.string().trim().max(2000).default('') }),
+  z.object({ action: z.literal('request_changes'), feedback: z.string().trim().min(3).max(2000) })
+]);
 
 function asyncHandler(handler) {
   return (request, response, next) => Promise.resolve(handler(request, response, next)).catch(next);
@@ -49,8 +59,11 @@ async function taskRecords(database, filter) {
     database.collection('users').find({ _id: { $in: assigneeIds } }, { projection: { fullName: 1 } }).toArray(),
     database.collection('job_roles').find({ _id: { $in: roleIds } }, { projection: { name: 1 } }).toArray()
   ]);
+  const reviewerIds = [...new Map(tasks.filter((task) => task.review?.reviewedBy).map((task) => [task.review.reviewedBy.toString(), task.review.reviewedBy])).values()];
+  const reviewers = reviewerIds.length ? await database.collection('users').find({ _id: { $in: reviewerIds } }, { projection: { fullName: 1 } }).toArray() : [];
   const assigneeNames = new Map(assignees.map((user) => [user._id.toString(), user.fullName]));
   const roleNames = new Map(roles.map((role) => [role._id.toString(), role.name]));
+  const reviewerNames = new Map(reviewers.map((user) => [user._id.toString(), user.fullName]));
 
   return tasks.map((task) => ({
     id: task._id.toString(),
@@ -64,6 +77,8 @@ async function taskRecords(database, filter) {
     dueAt: task.dueAt,
     hasClientInfo: task.hasClientInfo,
     client: task.hasClientInfo ? task.client : null,
+    submission: task.submission ? { summary: task.submission.summary, link: task.submission.link ?? '', submittedAt: task.submission.submittedAt } : null,
+    review: task.review ? { feedback: task.review.feedback ?? '', reviewedAt: task.review.reviewedAt, reviewerName: reviewerNames.get(task.review.reviewedBy?.toString()) ?? 'Administrator' } : null,
     createdAt: task.createdAt
   }));
 }
@@ -110,6 +125,48 @@ export function createTasksRouter({ database }) {
     await database.collection('task_activity').insertOne({ taskId: result.insertedId, actorId: request.user._id, action: 'Task created', createdAt: now });
     const [record] = await taskRecords(database, { _id: result.insertedId });
     return response.status(201).json({ data: { task: record } });
+  }));
+
+  router.patch('/:id', requireSession(database), asyncHandler(async (request, response) => {
+    if (!ObjectId.isValid(request.params.id)) return response.status(404).json({ error: { code: 'TASK_NOT_FOUND', message: 'Task not found.' } });
+    const input = taskActionSchema.safeParse(request.body);
+    if (!input.success) return response.status(400).json({ error: { code: 'INVALID_TASK_ACTION', message: 'Add a submission note of at least 10 characters, a valid web link, or review feedback.' } });
+
+    const taskId = new ObjectId(request.params.id);
+    const task = await database.collection('tasks').findOne({ _id: taskId });
+    if (!task) return response.status(404).json({ error: { code: 'TASK_NOT_FOUND', message: 'Task not found.' } });
+    const now = new Date();
+    const action = input.data.action;
+    let nextStatus;
+    let update;
+    let activity;
+
+    if (request.user.accountRole === 'admin') {
+      if (!['approve', 'request_changes'].includes(action)) return response.status(403).json({ error: { code: 'FORBIDDEN', message: 'Administrators can approve work or request changes.' } });
+      if (task.status !== 'submitted_for_review') return response.status(409).json({ error: { code: 'TASK_NOT_AWAITING_REVIEW', message: 'This task is not currently awaiting review.' } });
+      nextStatus = action === 'approve' ? 'completed' : 'changes_requested';
+      update = { status: nextStatus, review: { feedback: input.data.feedback, reviewedBy: request.user._id, reviewedAt: now }, updatedAt: now };
+      activity = action === 'approve' ? 'Work approved and task completed' : 'Changes requested';
+    } else {
+      if (!task.assigneeId.equals(request.user._id)) return response.status(403).json({ error: { code: 'FORBIDDEN', message: 'You can only update tasks assigned to you.' } });
+      if (action === 'start' && task.status === 'available') {
+        nextStatus = 'in_progress';
+        update = { status: nextStatus, updatedAt: now, startedAt: now };
+        activity = 'Task started';
+      } else if (action === 'submit' && ['in_progress', 'changes_requested'].includes(task.status)) {
+        nextStatus = 'submitted_for_review';
+        update = { status: nextStatus, submission: { summary: input.data.summary, link: input.data.link, submittedAt: now }, updatedAt: now };
+        activity = task.status === 'changes_requested' ? 'Revised work resubmitted for review' : 'Work submitted for review';
+      } else {
+        return response.status(409).json({ error: { code: 'INVALID_TASK_TRANSITION', message: 'This task cannot be updated with that action in its current status.' } });
+      }
+    }
+
+    const updated = await database.collection('tasks').updateOne({ _id: taskId, status: task.status }, { $set: update });
+    if (!updated.matchedCount) return response.status(409).json({ error: { code: 'TASK_STATUS_CHANGED', message: 'The task changed while you were updating it. Refresh and try again.' } });
+    await database.collection('task_activity').insertOne({ taskId, actorId: request.user._id, action: activity, createdAt: now });
+    const [record] = await taskRecords(database, { _id: taskId });
+    return response.json({ data: { task: record } });
   }));
 
   return router;

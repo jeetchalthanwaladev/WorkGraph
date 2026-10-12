@@ -32,6 +32,8 @@ export default function TasksPage() {
   const [employeesLoading, setEmployeesLoading] = useState(true);
   const [employeeLoadError, setEmployeeLoadError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [reviewNotes, setReviewNotes] = useState({});
+  const [reviewingTaskId, setReviewingTaskId] = useState('');
 
   const selectedEmployee = employees.find((employee) => employee.id === assigneeId);
   const availableRoles = useMemo(() => selectedEmployee?.roles ?? [], [selectedEmployee]);
@@ -85,10 +87,39 @@ export default function TasksPage() {
     finally { setSaving(false); }
   }
 
+  async function reviewTask(task, action) {
+    const feedback = reviewNotes[task.id] ?? '';
+    if (action === 'request_changes' && feedback.trim().length < 3) {
+      setError('Add feedback before requesting changes.');
+      return;
+    }
+    setError(''); setNotice(''); setReviewingTaskId(task.id);
+    try {
+      await request(`/api/v1/tasks/${task.id}`, { method: 'PATCH', body: JSON.stringify({ action, feedback }) });
+      await loadTaskWorkspace();
+      setNotice(action === 'approve' ? 'Task approved and marked complete.' : 'Changes requested. The employee can update and resubmit their work.');
+    } catch (reviewError) { setError(reviewError.message); }
+    finally { setReviewingTaskId(''); }
+  }
+
+  const awaitingReview = tasks.filter((task) => task.status === 'submitted_for_review');
+
   return <div className="content dashboard-content tasks-page">
     <div className="welcome"><div><p className="eyebrow">PLAN &amp; ASSIGN WORK</p><h1>Tasks</h1><p className="subtitle">Create a task, assign the right employee and role, and set the dates everyone is working toward.</p></div><div className="date-chip"><span className="date-icon">▤</span><span><small>TASKS</small><strong>{tasks.length} in workspace</strong></span></div></div>
     {notice && <p className="notice-banner" role="status">✓ {notice}</p>}{error && <p className="form-error page-error" role="alert">{error}</p>}
     {employeeLoadError && <p className="form-error page-error" role="alert">Could not load employees: {employeeLoadError}</p>}
+
+    <article className="panel review-queue-panel">
+      <div className="panel-heading"><div><h2>Awaiting review</h2><p>Review employee submissions and decide the next step.</p></div><span className="count-badge">{awaitingReview.length}</span></div>
+      {awaitingReview.length ? <div className="review-queue-list">{awaitingReview.map((task) => <article className="review-queue-item" key={task.id}>
+        <div className="review-task-heading"><div><h3>{task.title}</h3><p>{task.assignee.fullName} · {task.role.name}</p></div><span className="task-status status-submitted_for_review">Awaiting review</span></div>
+        <p className="review-task-description">{task.description}</p>
+        <div className="review-submission"><div className="review-submission-heading"><strong>Employee submission</strong><span>{task.submission?.submittedAt ? `Submitted ${formatDate(task.submission.submittedAt)}` : 'Submission details'}</span></div><p>{task.submission?.summary || 'No submission summary was provided.'}</p>{task.submission?.link && <a href={task.submission.link} target="_blank" rel="noreferrer">Open deliverable ↗</a>}</div>
+        {task.review?.feedback && <div className="review-feedback"><strong>Previous review feedback</strong><p>{task.review.feedback}</p></div>}
+        <label className="review-feedback-field" htmlFor={`review-note-${task.id}`}>Feedback <span>Optional when approving; required when requesting changes.</span><textarea id={`review-note-${task.id}`} value={reviewNotes[task.id] ?? ''} onChange={(event) => setReviewNotes((current) => ({ ...current, [task.id]: event.target.value }))} maxLength="2000" rows="3" placeholder="Share clear, actionable feedback with the employee." /></label>
+        <div className="review-actions"><button className="secondary-button request-changes-button" type="button" disabled={reviewingTaskId === task.id} onClick={() => reviewTask(task, 'request_changes')}>{reviewingTaskId === task.id ? 'Saving…' : 'Request changes'}</button><button className="primary-button" type="button" disabled={reviewingTaskId === task.id} onClick={() => reviewTask(task, 'approve')}>{reviewingTaskId === task.id ? 'Saving…' : 'Approve & complete'}<span>✓</span></button></div>
+      </article>)}</div> : <div className="list-empty review-empty"><span>✓</span><strong>No tasks awaiting review</strong><small>Employee submissions will appear here when they are ready.</small></div>}
+    </article>
 
     <article className="panel task-form-panel">
       <div className="panel-heading"><div><h2>Create a task</h2><p>Assign work to an active employee under one of their job roles.</p></div><span className="setup-badge">ADMIN</span></div>

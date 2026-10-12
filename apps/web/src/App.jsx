@@ -29,6 +29,10 @@ export default function App() {
     <Route path="/dashboard/tasks" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" taskView="overview" /></ProtectedRoute>} />
     <Route path="/dashboard/tasks/review" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" taskView="review" /></ProtectedRoute>} />
     <Route path="/dashboard/tasks/new" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" taskView="new" /></ProtectedRoute>} />
+    <Route path="/dashboard/status/in-progress" element={<ProtectedRoute employeeOnly><DashboardLayout section="status" statusView="in_progress" /></ProtectedRoute>} />
+    <Route path="/dashboard/status/review" element={<ProtectedRoute employeeOnly><DashboardLayout section="status" statusView="submitted_for_review" /></ProtectedRoute>} />
+    <Route path="/dashboard/status/completed" element={<ProtectedRoute employeeOnly><DashboardLayout section="status" statusView="completed" /></ProtectedRoute>} />
+    <Route path="/dashboard/status/changes-requested" element={<ProtectedRoute employeeOnly><DashboardLayout section="status" statusView="changes_requested" /></ProtectedRoute>} />
     <Route path="/dashboard/team" element={<ProtectedRoute adminOnly><DashboardLayout section="team" /></ProtectedRoute>} />
     <Route path="/dashboard/profile" element={<ProtectedRoute><DashboardLayout section="profile" /></ProtectedRoute>} />
     <Route path="*" element={<Navigate to={status === 'authenticated' ? '/dashboard' : '/login'} replace />} />

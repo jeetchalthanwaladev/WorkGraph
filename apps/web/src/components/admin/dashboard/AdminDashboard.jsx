@@ -4,7 +4,7 @@ import { request } from '../../../services/api.js';
 import MetricCard from './MetricCard.jsx';
 import StatusBreakdown from './StatusBreakdown.jsx';
 
-const EMPTY_SUMMARY = { summary: { employeeCount: 0, totalTasks: 0, overdueTasks: 0 }, statuses: [], workload: [], upcomingDeadlines: [], recentActivity: [] };
+const EMPTY_SUMMARY = { summary: { employeeCount: 0, totalTasks: 0, openTaskCount: 0, overdueTasks: 0 }, statuses: [], workload: [], upcomingDeadlines: [], recentActivity: [] };
 const dateLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 const timeLabel = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
@@ -26,7 +26,6 @@ export default function AdminDashboard({ user }) {
     return () => { active = false; };
   }, []);
   const { summary, statuses, workload, upcomingDeadlines, recentActivity } = data;
-  const openTasks = summary.totalTasks - (statuses.find((item) => item.id === 'completed')?.count ?? 0);
   const totalRoleAssignments = workload.reduce((total, role) => total + role.employeeCount, 0);
 
   return <div className="content dashboard-content admin-dashboard">
@@ -36,7 +35,7 @@ export default function AdminDashboard({ user }) {
     <div className="stats-grid admin-stats">
       <MetricCard label="ACTIVE EMPLOYEES" value={summary.employeeCount} note="People on your team" icon="♙" tone="purple" />
       <MetricCard label="TOTAL TASKS" value={summary.totalTasks} note="Across the workspace" icon="▤" tone="blue" />
-      <MetricCard label="OPEN TASKS" value={openTasks} note="Not yet completed" icon="◷" tone="amber" />
+      <MetricCard label="OPEN TASKS" value={summary.openTaskCount} note="Not yet completed" icon="◷" tone="amber" />
       <MetricCard label="OVERDUE" value={summary.overdueTasks} note="Past their due date" icon="!" tone="rose" />
     </div>
     <div className="admin-overview-grid">

@@ -5,6 +5,7 @@ const TASK_STATUSES = [
   { id: 'available', label: 'Available', color: 'blue' },
   { id: 'in_progress', label: 'In progress', color: 'purple' },
   { id: 'submitted_for_review', label: 'Awaiting review', color: 'amber' },
+  { id: 'changes_requested', label: 'Changes requested', color: 'rose' },
   { id: 'completed', label: 'Completed', color: 'green' }
 ];
 
@@ -26,10 +27,11 @@ export function createDashboardRouter({ database }) {
       users.countDocuments(activeEmployeeFilter),
       database.collection('job_roles').find({}).sort({ name: 1 }).toArray(),
       tasks.countDocuments({}),
+      tasks.countDocuments(openTaskFilter),
       ...TASK_STATUSES.map(({ id }) => tasks.countDocuments({ status: id })),
       tasks.countDocuments({ ...openTaskFilter, dueAt: { $lt: now } })
     ]);
-    const [totalTasks, ...counts] = taskCounts;
+    const [totalTasks, openTaskCount, ...counts] = taskCounts;
     const overdueTasks = counts.pop();
     const statuses = TASK_STATUSES.map((status, index) => ({ ...status, count: counts[index] }));
     const [upcomingDeadlines, recentActivity, workload] = await Promise.all([
@@ -52,7 +54,7 @@ export function createDashboardRouter({ database }) {
     ]);
 
     response.json({ data: {
-      summary: { employeeCount, totalTasks, overdueTasks },
+      summary: { employeeCount, totalTasks, openTaskCount, overdueTasks },
       statuses,
       workload,
       upcomingDeadlines: upcomingDeadlines.map(({ _id, ...task }) => ({ id: _id.toString(), ...task })),

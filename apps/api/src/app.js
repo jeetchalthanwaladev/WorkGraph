@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { createAuthRouter } from './auth.js';
 import { createDashboardRouter } from './dashboard.js';
+import { createTasksRouter } from './tasks.js';
 
 export function createApp({ webOrigin = 'http://localhost:5173', database, secureCookies = false } = {}) {
   const app = express();
@@ -32,6 +33,7 @@ export function createApp({ webOrigin = 'http://localhost:5173', database, secur
 
   app.use('/api/v1', createAuthRouter({ database, secureCookies }));
   app.use('/api/v1/dashboard', createDashboardRouter({ database }));
+  app.use('/api/v1/tasks', createTasksRouter({ database }));
 
   app.use((_request, response) => {
     response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found.' } });

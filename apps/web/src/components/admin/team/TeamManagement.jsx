@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { request } from '../../../services/api.js';
 
 export default function TeamManagement() {
-  const [employees, setEmployees] = useState([]); const [roles, setRoles] = useState([]);
+  const [employees, setEmployees] = useState([]); const [roles, setRoles] = useState([]); const [resetRequests, setResetRequests] = useState([]); const [resetPasswords, setResetPasswords] = useState({});
   const [fullName, setFullName] = useState(''); const [loginId, setLoginId] = useState(''); const [password, setPassword] = useState('');
   const [roleIds, setRoleIds] = useState([]); const [newRole, setNewRole] = useState(''); const [notice, setNotice] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  const loadTeam = useCallback(async () => { const [employeeData, roleData] = await Promise.all([request('/api/v1/employees'), request('/api/v1/roles')]); setEmployees(employeeData.employees); setRoles(roleData.roles); }, []);
+  const loadTeam = useCallback(async () => { const [employeeData, roleData, resetData] = await Promise.all([request('/api/v1/employees'), request('/api/v1/roles'), request('/api/v1/auth/admin/password-reset-requests')]); setEmployees(employeeData.employees); setRoles(roleData.roles); setResetRequests(resetData.requests); }, []);
   useEffect(() => { loadTeam().catch((loadError) => setError(loadError.message)); }, [loadTeam]);
   async function handleCreateEmployee(event) {
     event.preventDefault(); setError(''); setNotice(''); setBusy(true);
@@ -16,6 +16,13 @@ export default function TeamManagement() {
     event.preventDefault(); setError(''); setNotice(''); setBusy(true);
     try { await request('/api/v1/roles', { method: 'POST', body: JSON.stringify({ name: newRole }) }); setNewRole(''); await loadTeam(); setNotice('Job role added and is ready to assign.'); }
     catch (createError) { setError(createError.message); } finally { setBusy(false); }
+  }
+  async function handlePasswordReset(event, resetRequest) {
+    event.preventDefault(); setError(''); setNotice(''); setBusy(true);
+    try {
+      await request(`/api/v1/auth/admin/password-reset-requests/${resetRequest.id}/reset`, { method: 'POST', body: JSON.stringify({ newPassword: resetPasswords[resetRequest.id] }) });
+      setResetPasswords((current) => ({ ...current, [resetRequest.id]: '' })); await loadTeam(); setNotice(`Password reset for ${resetRequest.loginId}. Share the new password with the user securely.`);
+    } catch (resetError) { setError(resetError.message); } finally { setBusy(false); }
   }
   function toggleRole(id) { setRoleIds((current) => current.includes(id) ? current.filter((roleId) => roleId !== id) : [...current, id]); }
 
@@ -38,6 +45,9 @@ export default function TeamManagement() {
     </div>
     <article className="panel employee-list-panel"><div className="panel-heading"><div><h2>Employee accounts</h2><p>Active accounts managed by your workspace</p></div><span className="count-badge">{employees.length}</span></div>
       {employees.length ? <div className="employee-table-wrap"><table className="employee-table"><thead><tr><th>EMPLOYEE</th><th>LOGIN ID</th><th>JOB ROLES</th><th>STATUS</th></tr></thead><tbody>{employees.map((employee) => <tr key={employee.id}><td><span className="employee-name"><i>{employee.fullName.slice(0, 1).toUpperCase()}</i>{employee.fullName}</span></td><td>{employee.loginId}</td><td><div className="role-chips">{employee.roles.length ? employee.roles.map((role) => <span key={role.id}>{role.name}</span>) : <span className="empty-role">No role assigned</span>}</div></td><td><span className="active-status"><i /> Active</span></td></tr>)}</tbody></table></div> : <div className="list-empty"><span>♙</span><strong>No employee accounts yet</strong><small>Create an account above to add someone to your workspace.</small></div>}
+    </article>
+    <article className="panel reset-requests-panel"><div className="panel-heading"><div><h2>Password reset requests</h2><p>Review user requests and set a new temporary password for them.</p></div><span className="count-badge">{resetRequests.length}</span></div>
+      {resetRequests.length ? <div className="reset-request-list">{resetRequests.map((resetRequest) => <form className="reset-request-item" key={resetRequest.id} onSubmit={(event) => handlePasswordReset(event, resetRequest)}><div className="reset-request-user"><strong>{resetRequest.fullName}</strong><span>{resetRequest.loginId}</span><small>Requested {new Date(resetRequest.updatedAt).toLocaleString()} · {resetRequest.requestCount} request{resetRequest.requestCount === 1 ? '' : 's'}</small></div><label>New temporary password<input type="password" value={resetPasswords[resetRequest.id] ?? ''} onChange={(event) => setResetPasswords((current) => ({ ...current, [resetRequest.id]: event.target.value }))} required minLength="8" autoComplete="new-password" /></label><button className="secondary-button" type="submit" disabled={busy}>Reset password</button></form>)}</div> : <div className="list-empty reset-empty"><span>⌑</span><strong>No pending password requests</strong><small>New requests from the login page will appear here.</small></div>}
     </article><footer>WorkGraph <span>·</span> Employee access is managed by administrators</footer>
   </div>;
 }

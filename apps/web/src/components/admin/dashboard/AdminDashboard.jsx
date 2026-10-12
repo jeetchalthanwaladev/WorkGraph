@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { request } from '../../../services/api.js';
 import MetricCard from './MetricCard.jsx';
 import StatusBreakdown from './StatusBreakdown.jsx';
+import TaskStatusPie from './TaskStatusPie.jsx';
 
-const EMPTY_SUMMARY = { summary: { employeeCount: 0, totalTasks: 0, overdueTasks: 0 }, statuses: [], workload: [], upcomingDeadlines: [], recentActivity: [] };
+const EMPTY_SUMMARY = { summary: { employeeCount: 0, totalTasks: 0, openTaskCount: 0, overdueTasks: 0 }, statuses: [], upcomingDeadlines: [], recentActivity: [] };
 const dateLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 const timeLabel = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
@@ -25,9 +26,7 @@ export default function AdminDashboard({ user }) {
     request('/api/v1/dashboard/summary').then((summary) => { if (active) setData(summary); }).catch((loadError) => { if (active) setError(loadError.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
-  const { summary, statuses, workload, upcomingDeadlines, recentActivity } = data;
-  const openTasks = summary.totalTasks - (statuses.find((item) => item.id === 'completed')?.count ?? 0);
-  const totalRoleAssignments = workload.reduce((total, role) => total + role.employeeCount, 0);
+  const { summary, statuses, upcomingDeadlines, recentActivity } = data;
 
   return <div className="content dashboard-content admin-dashboard">
     <div className="welcome"><div><p className="eyebrow">WORKSPACE OVERVIEW</p><h1>Good to see you, {user.fullName.split(' ')[0]}</h1><p className="subtitle">A live snapshot of your people, work, and deadlines.</p></div><div className="date-chip"><span className="date-icon">✧</span><span><small>TODAY</small><strong>{dateLabel.format(new Date())}</strong></span></div></div>
@@ -36,18 +35,16 @@ export default function AdminDashboard({ user }) {
     <div className="stats-grid admin-stats">
       <MetricCard label="ACTIVE EMPLOYEES" value={summary.employeeCount} note="People on your team" icon="♙" tone="purple" />
       <MetricCard label="TOTAL TASKS" value={summary.totalTasks} note="Across the workspace" icon="▤" tone="blue" />
-      <MetricCard label="OPEN TASKS" value={openTasks} note="Not yet completed" icon="◷" tone="amber" />
+      <MetricCard label="OPEN TASKS" value={summary.openTaskCount} note="Not yet completed" icon="◷" tone="amber" />
       <MetricCard label="OVERDUE" value={summary.overdueTasks} note="Past their due date" icon="!" tone="rose" />
     </div>
     <div className="admin-overview-grid">
       <StatusBreakdown statuses={statuses} totalTasks={summary.totalTasks} />
-      <article className="panel admin-widget"><div className="panel-heading"><div><h2>Team by role</h2><p>Active employees assigned to each role</p></div><span className="count-badge">{totalRoleAssignments}</span></div>
-        {workload.length ? <ul className="role-workload">{workload.map((role) => <li key={role.id}><span className="workload-symbol">✦</span><span className="workload-name">{role.name}<small>{role.employeeCount} {role.employeeCount === 1 ? 'employee' : 'employees'}</small></span><strong>{role.employeeCount}</strong></li>)}</ul> : <div className="widget-empty compact"><span className="widget-empty-icon">♙</span><strong>No job roles yet</strong><p>Create roles and assign them to team members.</p></div>}
-      </article>
+      <TaskStatusPie statuses={statuses} totalTasks={summary.totalTasks} />
       <article className="panel admin-widget"><div className="panel-heading"><div><h2>Recent activity</h2><p>Latest changes across your workspace</p></div><span className="setup-badge">ACTIVITY</span></div><ActivityList items={recentActivity} /></article>
       <article className="panel admin-widget"><div className="panel-heading"><div><h2>Upcoming deadlines</h2><p>Due in the next seven days</p></div><span className="setup-badge">7 DAYS</span></div><DeadlineList items={upcomingDeadlines} /></article>
     </div>
-    <div className="admin-note"><span>✦</span><div><strong>Your admin workspace</strong><p>Manage employee access and job roles from <Link to="/dashboard/team">Team &amp; roles</Link>. Task creation, assignments, and reporting will appear here as those features are added.</p></div></div>
+    <div className="admin-note"><span>✦</span><div><strong>Your admin workspace</strong><p><Link to="/dashboard/tasks/new">Create and assign tasks</Link> to your team. Manage employee access and job roles from <Link to="/dashboard/team">Team &amp; roles</Link>.</p></div></div>
     <footer>WorkGraph <span>·</span> Office task management</footer>
   </div>;
 }

@@ -8,6 +8,10 @@ import { z } from 'zod';
 const COOKIE_NAME = 'workgraph_session';
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 const loginSchema = z.object({ loginId: z.string().trim().min(1).max(100), password: z.string().min(1).max(200) });
+const profileSchema = z.object({ fullName: z.string().trim().min(2).max(100), loginId: z.string().trim().min(3).max(100) });
+const passwordChangeSchema = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(8).max(200) });
+const resetRequestSchema = z.object({ loginId: z.string().trim().min(1).max(100) });
+const resetPasswordSchema = z.object({ newPassword: z.string().min(8).max(200) });
 const employeeSchema = z.object({
   fullName: z.string().trim().min(2).max(100),
   loginId: z.string().trim().min(3).max(100),
@@ -94,6 +98,62 @@ export function createAuthRouter({ database, secureCookies }) {
     const token = getCookie(request, COOKIE_NAME);
     if (token) await sessions.deleteOne({ tokenHash: hashToken(token) });
     clearSessionCookie(response, { secure });
+    return response.json({ data: { success: true } });
+  }));
+
+  router.put('/auth/profile', requireSession(database), asyncHandler(async (request, response) => {
+    const input = profileSchema.safeParse(request.body);
+    if (!input.success) return response.status(400).json({ error: { code: 'INVALID_PROFILE', message: 'Enter a name and login ID with valid lengths.' } });
+    const duplicate = await users.findOne({ loginId: input.data.loginId, _id: { $ne: request.user._id } });
+    if (duplicate) return response.status(409).json({ error: { code: 'LOGIN_ID_EXISTS', message: 'That login ID is already in use.' } });
+    await users.updateOne({ _id: request.user._id }, { $set: { ...input.data, updatedAt: new Date() } });
+    return response.json({ data: { user: await publicUser(database, { ...request.user, ...input.data }) } });
+  }));
+
+  router.post('/auth/change-password', requireSession(database), asyncHandler(async (request, response) => {
+    const input = passwordChangeSchema.safeParse(request.body);
+    if (!input.success) return response.status(400).json({ error: { code: 'INVALID_PASSWORD', message: 'Enter your current password and a new password of at least 8 characters.' } });
+    if (!await bcrypt.compare(input.data.currentPassword, request.user.passwordHash)) {
+      return response.status(400).json({ error: { code: 'CURRENT_PASSWORD_INCORRECT', message: 'Your current password is incorrect.' } });
+    }
+    await users.updateOne({ _id: request.user._id }, { $set: { passwordHash: await bcrypt.hash(input.data.newPassword, 12), updatedAt: new Date() } });
+    await sessions.deleteMany({ userId: request.user._id, tokenHash: { $ne: request.session.tokenHash } });
+    return response.json({ data: { success: true } });
+  }));
+
+  router.post('/auth/password-reset-requests', rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false }), asyncHandler(async (request, response) => {
+    const input = resetRequestSchema.safeParse(request.body);
+    if (!input.success) return response.status(200).json({ data: { success: true } });
+    const user = await users.findOne({ loginId: input.data.loginId, isActive: true }, { projection: { _id: 1 } });
+    if (user) {
+      const requests = database.collection('password_reset_requests');
+      const existing = await requests.findOne({ userId: user._id, status: 'pending' });
+      if (existing) await requests.updateOne({ _id: existing._id }, { $set: { updatedAt: new Date() }, $inc: { requestCount: 1 } });
+      else await requests.insertOne({ userId: user._id, status: 'pending', requestCount: 1, createdAt: new Date(), updatedAt: new Date() });
+    }
+    return response.json({ data: { success: true } });
+  }));
+
+  router.get('/auth/admin/password-reset-requests', requireSession(database), requireAdmin, asyncHandler(async (_request, response) => {
+    const pending = await database.collection('password_reset_requests').aggregate([
+      { $match: { status: 'pending' } }, { $sort: { updatedAt: -1 } },
+      { $lookup: { from: 'users', localField: 'userId', foreignField: '_id', as: 'user' } },
+      { $unwind: '$user' },
+      { $project: { _id: 1, requestCount: 1, createdAt: 1, updatedAt: 1, fullName: '$user.fullName', loginId: '$user.loginId' } }
+    ]).toArray();
+    return response.json({ data: { requests: pending.map(({ _id, ...item }) => ({ id: _id.toString(), ...item })) } });
+  }));
+
+  router.post('/auth/admin/password-reset-requests/:id/reset', requireSession(database), requireAdmin, asyncHandler(async (request, response) => {
+    const input = resetPasswordSchema.safeParse(request.body);
+    if (!input.success || !ObjectId.isValid(request.params.id)) return response.status(400).json({ error: { code: 'INVALID_PASSWORD', message: 'Enter a password with at least 8 characters.' } });
+    const resetRequests = database.collection('password_reset_requests');
+    const resetRequest = await resetRequests.findOne({ _id: new ObjectId(request.params.id), status: 'pending' });
+    if (!resetRequest) return response.status(404).json({ error: { code: 'RESET_REQUEST_NOT_FOUND', message: 'This password reset request is no longer pending.' } });
+    const result = await users.updateOne({ _id: resetRequest.userId, isActive: true }, { $set: { passwordHash: await bcrypt.hash(input.data.newPassword, 12), updatedAt: new Date() } });
+    if (!result.matchedCount) return response.status(404).json({ error: { code: 'USER_NOT_FOUND', message: 'The account is no longer active.' } });
+    await sessions.deleteMany({ userId: resetRequest.userId });
+    await resetRequests.updateOne({ _id: resetRequest._id }, { $set: { status: 'resolved', resolvedBy: request.user._id, resolvedAt: new Date() } });
     return response.json({ data: { success: true } });
   }));
 

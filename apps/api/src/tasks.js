@@ -90,7 +90,7 @@ export function createTasksRouter({ database }) {
   router.get('/', requireSession(database), asyncHandler(async (request, response) => {
     const filter = request.user.accountRole === 'admin'
       ? {}
-      : { assigneeId: request.user._id, status: { $in: ['available', 'in_progress', 'changes_requested'] } };
+      : { assigneeId: request.user._id, status: { $in: ['available', 'in_progress', 'changes_requested', 'submitted_for_review'] } };
     response.json({ data: { tasks: await taskRecords(database, filter) } });
   }));
 

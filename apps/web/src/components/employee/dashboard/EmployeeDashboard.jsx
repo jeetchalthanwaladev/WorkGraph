@@ -12,6 +12,7 @@ export default function EmployeeDashboard({ user }) {
   const [submissionLinks, setSubmissionLinks] = useState({});
   const [busyTaskId, setBusyTaskId] = useState('');
   const [dropTargetActive, setDropTargetActive] = useState(false);
+  const [reviewTask, setReviewTask] = useState(null);
   useEffect(() => {
     let active = true;
     request('/api/v1/tasks').then(({ tasks: assignedTasks }) => { if (active) setTasks(assignedTasks); }).catch((loadError) => { if (active) setError(loadError.message); });
@@ -46,10 +47,20 @@ export default function EmployeeDashboard({ user }) {
     if (!task || task.status !== 'in_progress') return;
     const summary = submissionDrafts[task.id] ?? '';
     if (summary.trim().length < 10) {
-      setError(`Add a work summary of at least 10 characters for “${task.title}” before dropping it here.`);
-      document.getElementById(`submission-${task.id}`)?.focus();
+      setError('');
+      setReviewTask(task);
       return;
     }
+    updateTask(task, { action: 'submit', summary, link: submissionLinks[task.id] ?? '' }, 'Your work has been sent to your administrator for review.');
+  }
+
+  function submitReviewPopup(event) {
+    event.preventDefault();
+    if (!reviewTask) return;
+    const summary = submissionDrafts[reviewTask.id] ?? '';
+    if (summary.trim().length < 10) return;
+    const task = reviewTask;
+    setReviewTask(null);
     updateTask(task, { action: 'submit', summary, link: submissionLinks[task.id] ?? '' }, 'Your work has been sent to your administrator for review.');
   }
 
@@ -69,5 +80,6 @@ export default function EmployeeDashboard({ user }) {
       </article>)}</div> : <div className="empty-state"><div className="empty-art"><span>▤</span><i>✳</i></div><h3>No active tasks right now</h3><p>Pending and in-progress tasks will appear here. Tasks awaiting review or already completed are hidden from this list.</p></div>}
     </article><article className="panel employee-review-panel"><div className="panel-heading"><div><h2>Going for review</h2><p>Tasks you have submitted to your administrator</p></div><span className="count-badge">{countStatus('submitted_for_review')}</span></div><div className="review-drop-zone" data-active={dropTargetActive} onDragOver={(event) => { event.preventDefault(); setDropTargetActive(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropTargetActive(false); }} onDrop={handleReviewDrop}><span className="review-drop-icon">✧</span><strong>Drop an in-progress task here</strong><small>It will be submitted for review with the work summary you entered.</small></div><div className="review-queue-list">{tasks.filter((task) => task.status === 'submitted_for_review').length ? tasks.filter((task) => task.status === 'submitted_for_review').map((task) => <article className="review-queue-item" key={task.id}><div className="review-queue-heading"><strong>{task.title}</strong><span className="task-status status-submitted_for_review">Awaiting review</span></div><small>{task.submission?.submittedAt ? `Submitted ${formatDate(task.submission.submittedAt)}` : 'Submitted for review'}</small>{task.submission?.summary && <p>{task.submission.summary}</p>}</article>) : <div className="review-queue-empty">No tasks are waiting for review.</div>}</div></article></div>
     <footer>WorkGraph <span>·</span> Office task management</footer>
+    {reviewTask && <div className="review-submit-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setReviewTask(null); }}><section className="review-submit-modal" role="dialog" aria-modal="true" aria-labelledby="review-submit-title"><button className="review-submit-close" type="button" aria-label="Close" onClick={() => setReviewTask(null)}>×</button><p className="eyebrow">SUBMIT FOR REVIEW</p><h2 id="review-submit-title">A little more detail is needed</h2><p className="review-submit-intro">Add a work summary for <strong>{reviewTask.title}</strong> so your administrator knows what is ready to review.</p><form className="review-submit-form" onSubmit={submitReviewPopup}><label htmlFor="review-popup-summary">Work summary <span>Required · at least 10 characters</span></label><textarea id="review-popup-summary" autoFocus value={submissionDrafts[reviewTask.id] ?? ''} onChange={(event) => setSubmissionDrafts((current) => ({ ...current, [reviewTask.id]: event.target.value }))} required minLength="10" maxLength="5000" rows="5" placeholder="Describe what you completed and anything the reviewer should know."/><label htmlFor="review-popup-link">Deliverable link <span>Optional</span></label><input id="review-popup-link" type="url" value={submissionLinks[reviewTask.id] ?? ''} onChange={(event) => setSubmissionLinks((current) => ({ ...current, [reviewTask.id]: event.target.value }))} placeholder="https://…"/><div className="review-submit-actions"><button className="secondary-button" type="button" onClick={() => setReviewTask(null)}>Cancel</button><button className="primary-button" type="submit" disabled={(submissionDrafts[reviewTask.id] ?? '').trim().length < 10 || busyTaskId === reviewTask.id}>{busyTaskId === reviewTask.id ? 'Submitting…' : 'Submit for review'}<span>→</span></button></div></form></section></div>}
   </div>;
 }

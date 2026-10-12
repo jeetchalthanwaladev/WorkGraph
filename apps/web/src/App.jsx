@@ -29,6 +29,7 @@ export default function App() {
     <Route path="/dashboard/tasks" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" taskView="overview" /></ProtectedRoute>} />
     <Route path="/dashboard/tasks/review" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" taskView="review" /></ProtectedRoute>} />
     <Route path="/dashboard/tasks/new" element={<ProtectedRoute adminOnly><DashboardLayout section="tasks" taskView="new" /></ProtectedRoute>} />
+    <Route path="/dashboard/calendar" element={<ProtectedRoute adminOnly><DashboardLayout section="calendar" /></ProtectedRoute>} />
     <Route path="/dashboard/status/in-progress" element={<ProtectedRoute employeeOnly><DashboardLayout section="status" statusView="in_progress" /></ProtectedRoute>} />
     <Route path="/dashboard/status/review" element={<ProtectedRoute employeeOnly><DashboardLayout section="status" statusView="submitted_for_review" /></ProtectedRoute>} />
     <Route path="/dashboard/status/completed" element={<ProtectedRoute employeeOnly><DashboardLayout section="status" statusView="completed" /></ProtectedRoute>} />

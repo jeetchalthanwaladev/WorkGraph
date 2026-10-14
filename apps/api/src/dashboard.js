@@ -24,8 +24,9 @@ export function createDashboardRouter({ database }) {
     const inSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     const activeEmployeeFilter = { accountRole: 'employee', isActive: true };
     const openTaskFilter = { status: { $nin: ['completed', 'cancelled'] } };
-    const [employeeCount, ...taskCounts] = await Promise.all([
+    const [employeeCount, clientCount, ...taskCounts] = await Promise.all([
       users.countDocuments(activeEmployeeFilter),
+      database.collection('clients').countDocuments({}),
       tasks.countDocuments({}),
       tasks.countDocuments(openTaskFilter),
       ...TASK_STATUSES.map(({ id }) => tasks.countDocuments({ status: id })),
@@ -49,7 +50,7 @@ export function createDashboardRouter({ database }) {
     ]);
 
     response.json({ data: {
-      summary: { employeeCount, totalTasks, openTaskCount, overdueTasks },
+      summary: { employeeCount, clientCount, totalTasks, openTaskCount, overdueTasks },
       statuses,
       upcomingDeadlines: upcomingDeadlines.map(({ _id, ...task }) => ({ id: _id.toString(), ...task })),
       recentActivity: recentActivity.map(({ _id, ...activity }) => ({ id: _id.toString(), ...activity }))

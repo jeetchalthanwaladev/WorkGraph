@@ -3,7 +3,8 @@ import { MongoClient } from 'mongodb';
 const collectionDefinitions = [
   { name: 'users', indexes: [{ key: { loginId: 1 }, options: { unique: true, name: 'users_login_id_unique' } }] },
   { name: 'job_roles', indexes: [{ key: { name: 1 }, options: { unique: true, name: 'job_roles_name_unique' } }] },
-  { name: 'tasks', indexes: [{ key: { status: 1, dueAt: 1 }, options: { name: 'tasks_status_due_at' } }, { key: { claimedBy: 1, status: 1 }, options: { name: 'tasks_claimed_by_status' } }, { key: { assigneeId: 1, status: 1, createdAt: -1 }, options: { name: 'tasks_assignee_status_created' } }] },
+  { name: 'clients', indexes: [{ key: { createdAt: -1 }, options: { name: 'clients_created_at' } }] },
+  { name: 'tasks', indexes: [{ key: { status: 1, dueAt: 1 }, options: { name: 'tasks_status_due_at' } }, { key: { claimedBy: 1, status: 1 }, options: { name: 'tasks_claimed_by_status' } }, { key: { assigneeId: 1, status: 1, createdAt: -1 }, options: { name: 'tasks_assignee_status_created' } }, { key: { clientId: 1, createdAt: -1 }, options: { name: 'tasks_client_created' } }] },
   { name: 'task_activity', indexes: [{ key: { taskId: 1, createdAt: -1 }, options: { name: 'task_activity_task_created' } }] },
   { name: 'task_comments', indexes: [{ key: { taskId: 1, createdAt: 1 }, options: { name: 'task_comments_task_created' } }] },
   { name: 'sessions', indexes: [{ key: { tokenHash: 1 }, options: { unique: true, name: 'sessions_token_hash_unique' } }, { key: { expiresAt: 1 }, options: { expireAfterSeconds: 0, name: 'sessions_expiry_ttl' } }] },

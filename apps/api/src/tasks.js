@@ -20,6 +20,7 @@ const taskSchema = z.object({
   roleId: z.string().regex(/^[a-fA-F0-9]{24}$/),
   reportingDate: dateField,
   completionDate: dateField,
+  clientId: z.union([z.string().regex(/^[a-fA-F0-9]{24}$/), z.literal('')]).optional(),
   hasClientInfo: z.boolean().default(false),
   client: clientSchema.optional()
 }).superRefine((task, context) => {
@@ -56,17 +57,22 @@ async function taskRecords(database, filter) {
 
   const assigneeIds = [...new Map(tasks.map((task) => [task.assigneeId.toString(), task.assigneeId])).values()];
   const roleIds = [...new Map(tasks.map((task) => [task.roleId.toString(), task.roleId])).values()];
-  const [assignees, roles] = await Promise.all([
+  const clientIds = [...new Map(tasks.filter((task) => task.clientId).map((task) => [task.clientId.toString(), task.clientId])).values()];
+  const [assignees, roles, clientRecords] = await Promise.all([
     database.collection('users').find({ _id: { $in: assigneeIds } }, { projection: { fullName: 1 } }).toArray(),
-    database.collection('job_roles').find({ _id: { $in: roleIds } }, { projection: { name: 1 } }).toArray()
+    database.collection('job_roles').find({ _id: { $in: roleIds } }, { projection: { name: 1 } }).toArray(),
+    clientIds.length ? database.collection('clients').find({ _id: { $in: clientIds } }, { projection: { name: 1, company: 1 } }).toArray() : []
   ]);
   const reviewerIds = [...new Map(tasks.filter((task) => task.review?.reviewedBy).map((task) => [task.review.reviewedBy.toString(), task.review.reviewedBy])).values()];
   const reviewers = reviewerIds.length ? await database.collection('users').find({ _id: { $in: reviewerIds } }, { projection: { fullName: 1 } }).toArray() : [];
   const assigneeNames = new Map(assignees.map((user) => [user._id.toString(), user.fullName]));
   const roleNames = new Map(roles.map((role) => [role._id.toString(), role.name]));
+  const linkedClients = new Map(clientRecords.map((client) => [client._id.toString(), client]));
   const reviewerNames = new Map(reviewers.map((user) => [user._id.toString(), user.fullName]));
 
-  return tasks.map((task) => ({
+  return tasks.map((task) => {
+    const linkedClient = task.clientId ? linkedClients.get(task.clientId.toString()) : null;
+    return ({
     id: task._id.toString(),
     title: task.title,
     description: task.description,
@@ -76,12 +82,14 @@ async function taskRecords(database, filter) {
     reportingDate: task.reportAt?.toISOString().slice(0, 10),
     completionDate: task.completionDueAt?.toISOString().slice(0, 10),
     dueAt: task.dueAt,
-    hasClientInfo: task.hasClientInfo,
-    client: task.hasClientInfo ? task.client : null,
+    clientId: task.clientId?.toString() ?? '',
+    hasClientInfo: Boolean(task.hasClientInfo || linkedClient),
+    client: task.hasClientInfo ? task.client : linkedClient ? { name: linkedClient.name, company: linkedClient.company ?? '', email: '', phone: '' } : null,
     submission: task.submission ? { summary: task.submission.summary, link: task.submission.link ?? '', submittedAt: task.submission.submittedAt } : null,
     review: task.review ? { feedback: task.review.feedback ?? '', reviewedAt: task.review.reviewedAt, reviewerName: reviewerNames.get(task.review.reviewedBy?.toString()) ?? 'Administrator' } : null,
     createdAt: task.createdAt
-  }));
+  });
+  });
 }
 
 export function createTasksRouter({ database }) {
@@ -100,11 +108,13 @@ export function createTasksRouter({ database }) {
 
     const assigneeId = new ObjectId(input.data.assigneeId);
     const roleId = new ObjectId(input.data.roleId);
+    const clientId = input.data.clientId ? new ObjectId(input.data.clientId) : null;
     const assignee = await database.collection('users').findOne({ _id: assigneeId, accountRole: 'employee', isActive: true });
     if (!assignee) return response.status(400).json({ error: { code: 'INVALID_ASSIGNEE', message: 'Choose an active employee.' } });
     if (!(assignee.roleIds ?? []).some((assignedRoleId) => assignedRoleId.equals(roleId))) {
       return response.status(400).json({ error: { code: 'ROLE_NOT_ASSIGNED', message: 'Choose a role assigned to this employee.' } });
     }
+    if (clientId && !await database.collection('clients').findOne({ _id: clientId })) return response.status(400).json({ error: { code: 'INVALID_CLIENT', message: 'Choose a client that exists in the client directory.' } });
 
     const now = new Date();
     const reportAt = new Date(`${input.data.reportingDate}T12:00:00.000Z`);
@@ -114,6 +124,7 @@ export function createTasksRouter({ database }) {
       description: input.data.description,
       assigneeId,
       roleId,
+      clientId,
       reportAt,
       dueAt: reportAt,
       completionDueAt,
@@ -147,11 +158,13 @@ export function createTasksRouter({ database }) {
 
     const assigneeId = new ObjectId(input.data.assigneeId);
     const roleId = new ObjectId(input.data.roleId);
+    const clientId = input.data.clientId ? new ObjectId(input.data.clientId) : null;
     const assignee = await database.collection('users').findOne({ _id: assigneeId, accountRole: 'employee', isActive: true });
     if (!assignee) return response.status(400).json({ error: { code: 'INVALID_ASSIGNEE', message: 'Choose an active employee.' } });
     if (!(assignee.roleIds ?? []).some((assignedRoleId) => assignedRoleId.equals(roleId))) {
       return response.status(400).json({ error: { code: 'ROLE_NOT_ASSIGNED', message: 'Choose a role assigned to this employee.' } });
     }
+    if (clientId && !await database.collection('clients').findOne({ _id: clientId })) return response.status(400).json({ error: { code: 'INVALID_CLIENT', message: 'Choose a client that exists in the client directory.' } });
 
     const now = new Date();
     const reportAt = new Date(`${input.data.reportingDate}T12:00:00.000Z`);
@@ -163,6 +176,7 @@ export function createTasksRouter({ database }) {
         description: input.data.description,
         assigneeId,
         roleId,
+        clientId,
         reportAt,
         dueAt: reportAt,
         completionDueAt,

@@ -53,6 +53,7 @@ async function publicUser(database, user) {
     fullName: user.fullName,
     loginId: user.loginId,
     accountRole: user.accountRole,
+    clientId: user.clientId?.toString() ?? null,
     roles: roles.map(({ _id, name }) => ({ id: _id.toString(), name }))
   };
 }
